@@ -200,11 +200,16 @@
                             </div>
                             <hr>
                             <div class="content"></div>
+                            <p><a class="view_on_njump" target="_blank"><button>View on njump</button></a></p>
                         </div>
                     `;
 
                     //set content
                     div.getElementsByClassName( "content" )[ 0 ].innerText = event.content;
+
+                    //set view_on_njump button
+                    var nevent_str = threads.convertPubkeyAndRelaysToNprofile( "nevent", event.id, [ relay ] );
+                    div.getElementsByClassName( "view_on_njump" )[ 0 ].href = `https://njump.me/${nevent_str}`;
 
                     //retrieve display name, if needed
                     if ( !display_names.hasOwnProperty( event.pubkey ) ) {
@@ -244,7 +249,7 @@
                     div.getElementsByClassName( "date" )[ 0 ].innerText = new Date( event.created_at * 1000 ).toLocaleDateString( "en-CA" ) + " " + new Date( event.created_at * 1000 ).toLocaleTimeString();
 
                     //display entry
-                    $( '.thread' ).prepend( div );
+                    $( '.thread' ).prepend( div.firstElementChild );
 
                     //show thread page
                     showPage( 'thread_page' );
