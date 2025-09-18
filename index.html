@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no">
+        <title>Threads</title>
+        <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
+        <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+        <script src="https://bundle.run/bech32@2.0.0"></script>
+        <script>
+            var threads = {
+                hexToText: hex => {
+                    var bytes = new Uint8Array( Math.ceil( hex.length / 2 ) );
+                    var i; for ( i=0; i<hex.length; i++ ) bytes[ i ] = parseInt( hex.substr( i * 2, 2 ), 16 );
+                    var text = new TextDecoder().decode( bytes );
+                    return text;
+                },
+                textToHex: text => {
+                    var encoded = new TextEncoder().encode( text );
+                    return Array.from( encoded )
+                        .map( x => x.toString( 16 ).padStart( 2, "0" ) )
+                        .join( "" );
+                },
+                hexToBytes: hex => Uint8Array.from( hex.match( /.{1,2}/g ).map( byte => parseInt( byte, 16 ) ) ),
+                bytesToHex: bytes => bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" ),
+                convertNEvent: nevent => {
+                    var arr = bech32.bech32.fromWords( bech32.bech32.decode( nevent, 100_000 ).words );
+                    var hex = threads.bytesToHex( arr );
+                    if ( !hex.startsWith( "0020" ) ) var event_id = hex.substring( hex.length - 64 );
+                    else var event_id = hex.substring( 4, 68 );
+                    if ( !hex.startsWith( "0020" ) ) hex = hex.substring( 0, hex.length - 64 );
+                    else hex = hex.substring( 68 );
+                    var relays = [];
+                    var kind = null;
+                    var author = null;
+                    var loop = () => {
+                        if ( hex.startsWith( "03" ) ) {
+                            var kind_hex = hex.substring( 4, 12 );
+                            kind = parseInt( kind_hex, 16 );
+                            hex = hex.substring( 12 );
+                            loop();
+                        }
+                        if ( hex.startsWith( "02" ) ) {
+                            author = hex.substring( 4, 68 );
+                            hex = hex.substring( 68 );
+                            loop();
+                        }
+                        if ( hex.startsWith( "01" ) ) {
+                            var relay_length = parseInt( hex.substring( 2, 4 ), 16 );
+                            relays.push( threads.hexToText( hex.substring( 4, 4 + relay_length * 2 ) ) );
+                            hex = hex.substring( 4 + relay_length * 2 );
+                            loop();
+                        }
+                    }
+                    loop();
+                    return [ event_id, relays, kind, author ];
+                },
+                convertPubkeyAndRelaysToNprofile: ( prefix, pubkey, relays ) => {
+                    var relays_str = "";
+                    relays.forEach( relay => {
+                        var relay_str = threads.textToHex( relay );
+                        var len = ( relay_str.length / 2 ).toString( 16 );
+                        if ( len.length % 2 ) len = "0" + len;
+                        relays_str = relays_str + "01" + len + relay_str;
+                    });
+                    var hex = relays_str + "0020" + pubkey;
+                    var bytes = threads.hexToBytes( hex );
+                    var nevent = bech32.bech32.encode( prefix, bech32.bech32.toWords( bytes ), 100_000 );
+                    return nevent;
+                },
+                getLastEtag: tags => {
+                    var last_etag = null;
+                    tags.forEach( item => {
+                        if ( item[ 0 ] === "e" ) last_etag = item;
+                    });
+                    return last_etag;
+                },
+            }
+        </script>
+        <style>
+            * {
+                box-sizing: border-box;
+                font-size: 1.15rem;
+                font-family: Arial, sans-serif;
+            }
+            html {
+                max-width: 800px;
+                padding: 3rem 1rem;
+                margin: auto;
+                line-height: 1.25;
+                padding: 0;
+            }
+            body {
+                margin: 3rem 1rem;
+                word-wrap: break-word;
+            }
+            h1 {
+                font-size: 2rem;
+            }
+            h2 {
+                font-size: 1.5rem;
+            }
+            input {
+                line-height: 1.25;
+                width: 100%;
+                height: 1.8rem;
+                font-size: 1.15rem;
+                border: 1px solid grey;
+            }
+            .hidden {
+                display: none !important;
+            }
+            .post {
+                padding: 1rem;
+                border-radius: 1rem;
+                border: 1px solid black;
+                margin-bottom: 1rem;
+            }
+            .post_meta {
+                display: flex;
+                justify-content: flex-start;
+                align-items: center;
+            }
+            .post_meta * {
+                font-size: .9rem;
+            }
+            .pic_a {
+                display: block;
+                width: 2rem;
+                aspect-ratio: 1/1;
+                background-size: cover;
+                background-position: 50% 50%;
+                background-repeat: no-repeat;
+                border-radius: 50%;
+                float: left;
+                margin-right: 0.5rem;
+            }
+            @media screen and (max-width: 600px) {
+            }
+        </style>
+        <script>
+            var $ = document.querySelector.bind( document );
+            var $$ = document.querySelectorAll.bind( document );
+            var url_params = new URLSearchParams( window.location.search );
+            var url_keys = url_params.keys();
+            var $_GET = {}
+            for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
+            var hash_arr = window.location.href.substring( window.location.href.indexOf( "#" ) ).split( "#" );
+            hash_arr.splice( 0, 1 );
+            var params = {}
+            hash_arr.forEach( item => {
+                var vals = item.split( "=" );
+                params[ vals[ 0 ] ] = vals[ 1 ];
+            });
+        </script>
+    </head>
+    <body>
+        <div class="home_page">
+            <h1>Welcome to threads</h1>
+            <p>Please enter an nevent string from nostr</p>
+            <p><input class="nevent_string"></p>
+            <p><button class="submit_nevent_string">Submit</button></p>
+        </div>
+        <div class="loading_page hidden">
+            <div>Loading...</div>
+        </div>
+        <div class="thread_page hidden">
+            <h1>Thread</h1>
+            <div class="thread"></div>
+        </div>
+        <script>
+            var display_names = {}
+            var showPage = page => {
+                $( '.home_page' ).classList.add( "hidden" );
+                $( '.loading_page' ).classList.add( "hidden" );
+                $( '.thread_page' ).classList.add( "hidden" );
+                $( `.${page}` ).classList.remove( "hidden" );
+            }
+        </script>
+        <script>
+            (async()=>{
+                var getEvents = async ( id, relays, array_of_events = [] ) => {
+                    //retrieve event
+                    var relay = relays[ 0 ];
+                    var ids = [ id ];
+                    var events = await super_nostr.getEvents( relay, ids );
+                    var event = events[ 0 ];
+
+                    //prepare entry
+                    var content = event.content;
+                    var div = document.createElement( "div" );
+                    div.innerHTML = `
+                        <div class="post">
+                            <div class="post_meta">
+                                <a class="pic_a"></a>
+                                <div class="name_and_date">
+                                    <div class="name_div"></div>
+                                    <div class="date_div">Date: <span class="date"></span></div>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="content"></div>
+                        </div>
+                    `;
+
+                    //set content
+                    div.getElementsByClassName( "content" )[ 0 ].innerText = event.content;
+
+                    //retrieve display name, if needed
+                    if ( !display_names.hasOwnProperty( event.pubkey ) ) {
+                        var author = threads.convertPubkeyAndRelaysToNprofile( "nprofile", event.pubkey, relays );
+                        display_names[ event.pubkey ] = {nprofile: author, pic: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2c/Default_pfp.svg/480px-Default_pfp.svg.png"};
+                        var getMeta = async ( relay, pubkey ) => {
+                            var author_meta_events = await super_nostr.getEvents( relay, null, [ pubkey ], [ 0 ] );
+                            if ( author_meta_events.length ) {
+                                var meta = JSON.parse( author_meta_events[ 0 ].content );
+                                var name_obj = display_names[ pubkey ];
+                                if ( meta.hasOwnProperty( "username" ) ) name_obj[ "display_name" ] = meta[ "username" ];
+                                if ( meta.hasOwnProperty( "name" ) ) name_obj[ "display_name" ] = meta[ "name" ];
+                                if ( meta.hasOwnProperty( "display_name" ) ) name_obj[ "display_name" ] = meta[ "display_name" ];
+                                if ( meta.hasOwnProperty( "picture" ) ) name_obj[ "pic" ] = meta[ "picture" ];
+                                div.getElementsByClassName( "name_div" )[ 0 ].innerHTML = `<a class="author" target="_blank"></a>`;
+                                div.getElementsByClassName( "pic_a" )[ 0 ].style.backgroundImage = `url( "${name_obj[ "pic" ]}" )`;
+                                div.getElementsByClassName( "pic_a" )[ 0 ].href = `https://njump.me/${name_obj[ "nprofile" ]}`;
+                                div.getElementsByClassName( "author" )[ 0 ].innerText = name_obj[ "display_name" ];
+                                div.getElementsByClassName( "author" )[ 0 ].href = `https://njump.me/${name_obj[ "nprofile" ]}`;
+                            } else {
+                                if ( relay !== "wss://relay.damus.io/" ) getMeta( "wss://relay.damus.io/", pubkey );
+                            }
+                        }
+                        setTimeout( () => {
+                            getMeta( relay, event.pubkey );
+                        }, 10 );
+                    }
+
+                    //set author
+                    div.getElementsByClassName( "name_div" )[ 0 ].setAttribute( "data-author_id", event.pubkey );
+                    div.getElementsByClassName( "name_div" )[ 0 ].innerHTML = `<a target="_blank">Author</a>`;
+                    div.getElementsByClassName( "name_div" )[ 0 ].getElementsByTagName( "a" )[ 0 ].href = `https://njump.me/${display_names[ event.pubkey ][ "nprofile" ]}`;
+                    div.getElementsByClassName( "pic_a" )[ 0 ].style.backgroundImage = `url( "${display_names[ event.pubkey ][ "pic" ]}" )`;
+                    div.getElementsByClassName( "pic_a" )[ 0 ].href = `https://njump.me/${display_names[ event.pubkey ][ "nprofile" ]}`;
+
+                    //set date
+                    div.getElementsByClassName( "date" )[ 0 ].innerText = new Date( event.created_at * 1000 ).toLocaleDateString( "en-CA" ) + " " + new Date( event.created_at * 1000 ).toLocaleTimeString();
+
+                    //display entry
+                    $( '.thread' ).prepend( div );
+
+                    //show thread page
+                    showPage( 'thread_page' );
+
+                    var last_etag = threads.getLastEtag( event.tags );
+                    if ( last_etag ) return getEvents( last_etag[ 1 ], last_etag[ 2 ] && last_etag[ 2 ].startsWith( "wss" ) ? [ last_etag[ 2 ] ] : [ "wss://relay.damus.io" ], array_of_events );
+
+                    // array_of_events.push( event );
+                    // return array_of_events;
+                }
+                // var event_id = "nevent1qvzqqqqqqypzqqgd7ry53l56k4xjedl2gg8l5zx409vfsxmw568g8248avka8uz6qy2hwumn8ghj7mn0wd68ytn00p68ytnyv4mz7qgswaehxw309ahx7um5wghx6mmd9uqzpjhjzd7enamau69rlr5738la4frpcvlhh59w5tahnjdxyy2v3rrerky4ff";
+                $( '.nevent_string' ).value = "";
+                if ( params.nevent ) {
+                    showPage( 'loading_page' );
+                    var event_id = params.nevent;
+                    var [ nevent_id, nevent_relays, nevent_kind, nevent_author ] = threads.convertNEvent( event_id );
+                    var events = await getEvents( nevent_id, nevent_relays );
+                }
+                $( '.submit_nevent_string' ).onclick = () => {
+                    var nevent_string = $( '.nevent_string' ).value;
+                    var url = window.location.protocol + "//" + window.location.hostname + window.location.pathname + `#nevent=${nevent_string}`;
+                    window.location.href = url;
+                    window.location.reload();
+                }
+            })();
+        </script>
+    </body>
+</html>
