@@ -241,7 +241,7 @@
 
                     //set author
                     div.getElementsByClassName( "name_div" )[ 0 ].setAttribute( "data-author_id", event.pubkey );
-                    div.getElementsByClassName( "name_div" )[ 0 ].innerHTML = `<a target="_blank">Author</a>`;
+                    div.getElementsByClassName( "name_div" )[ 0 ].innerHTML = `<a target="_blank" class="author">Author</a>`;
                     div.getElementsByClassName( "name_div" )[ 0 ].getElementsByTagName( "a" )[ 0 ].href = `https://njump.me/${display_names[ event.pubkey ][ "nprofile" ]}`;
                     div.getElementsByClassName( "pic_a" )[ 0 ].style.backgroundImage = `url( "${display_names[ event.pubkey ][ "pic" ]}" )`;
                     div.getElementsByClassName( "pic_a" )[ 0 ].href = `https://njump.me/${display_names[ event.pubkey ][ "nprofile" ]}`;
@@ -251,6 +251,13 @@
 
                     //display entry
                     $( '.thread' ).prepend( div );
+
+                    //correct authors, if necessary
+                    Object.keys( display_names ).forEach( item => {
+                        $$( `[data-author_id="${item}"]` ).forEach( div => {
+                            div.getElementsByClassName( "author" )[ 0 ].innerText = display_names[ item ][ "display_name" ] ? display_names[ item ][ "display_name" ] : "Author";
+                        });
+                    });
 
                     //show thread page
                     showPage( 'thread_page' );
