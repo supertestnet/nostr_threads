@@ -203,6 +203,7 @@
                             <p style="text-align: right;"><a class="view_on_njump" target="_blank"><button>View on njump</button></a></p>
                         </div>
                     `;
+                    div = div.firstElementChild;
 
                     //set content
                     div.getElementsByClassName( "content" )[ 0 ].innerText = event.content;
@@ -215,7 +216,7 @@
                     if ( !display_names.hasOwnProperty( event.pubkey ) ) {
                         var author = threads.convertPubkeyAndRelaysToNprofile( "nprofile", event.pubkey, relays );
                         display_names[ event.pubkey ] = {nprofile: author, pic: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2c/Default_pfp.svg/480px-Default_pfp.svg.png"};
-                        var getMeta = async ( relay, pubkey ) => {
+                        var getMeta = async ( relay, pubkey, div ) => {
                             var author_meta_events = await super_nostr.getEvents( relay, null, [ pubkey ], [ 0 ] );
                             if ( author_meta_events.length ) {
                                 var meta = JSON.parse( author_meta_events[ 0 ].content );
@@ -230,11 +231,11 @@
                                 div.getElementsByClassName( "author" )[ 0 ].innerText = name_obj[ "display_name" ];
                                 div.getElementsByClassName( "author" )[ 0 ].href = `https://njump.me/${name_obj[ "nprofile" ]}`;
                             } else {
-                                if ( relay !== "wss://relay.damus.io/" ) getMeta( "wss://relay.damus.io/", pubkey );
+                                if ( relay !== "wss://relay.damus.io/" ) getMeta( "wss://relay.damus.io/", pubkey, div );
                             }
                         }
                         setTimeout( () => {
-                            getMeta( relay, event.pubkey );
+                            getMeta( relay, event.pubkey, div );
                         }, 10 );
                     }
 
@@ -249,7 +250,7 @@
                     div.getElementsByClassName( "date" )[ 0 ].innerText = new Date( event.created_at * 1000 ).toLocaleDateString( "en-CA" ) + " " + new Date( event.created_at * 1000 ).toLocaleTimeString();
 
                     //display entry
-                    $( '.thread' ).prepend( div.firstElementChild );
+                    $( '.thread' ).prepend( div );
 
                     //show thread page
                     showPage( 'thread_page' );
