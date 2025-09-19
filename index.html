@@ -388,10 +388,12 @@
                     showPage( 'loading_page' );
                     var event_id = params.nevent;
                     var [ nevent_id, nevent_relays, nevent_kind, nevent_author ] = threads.convertNEvent( event_id );
+                    if ( nevent_relays[ 0 ].includes( "nostr.wine" ) ) var relay_to_use = "wss://relay.damus.io";
+                    else var relay_to_use = nevent_relays[ 0 ];
                     //first try loading the main event
                     var privkey = await super_nostr.sha256( nevent_id );
                     var pubkey = super_nostr.getPubkey( privkey );
-                    var thread_events = await super_nostr.getEvents( nevent_relays[ 0 ], null, [ pubkey ], [ 44752 ], null, null, 1, null );
+                    var thread_events = await super_nostr.getEvents( relay_to_use, null, [ pubkey ], [ 44752 ], null, null, 1, null );
                     if ( thread_events.length ) {
                         thread_events = JSON.parse( thread_events[ 0 ].content ).events;
                         getEvents( thread_events );
@@ -401,7 +403,7 @@
                         var kind = 44752;
                         var msg = JSON.stringify({ version: 1, events });
                         var event = await super_nostr.prepEvent( privkey, msg, kind );
-                        super_nostr.sendEvent( event, nevent_relays[ 0 ] );
+                        super_nostr.sendEvent( event, relay_to_use );
                     }
                 }
                 $( '.submit_nevent_string' ).onclick = () => {
