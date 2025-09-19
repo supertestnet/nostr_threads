@@ -166,6 +166,13 @@
                 float: left;
                 margin-right: 0.5rem;
             }
+            .quoted_note {
+                display: flex;
+                flex-direction: column;
+                padding: 1rem;
+                border-radius: 1rem;
+                border: 1px solid black;
+            }
             @media screen and (max-width: 600px) {
             }
         </style>
@@ -263,7 +270,24 @@
                         var relay = id_and_event_and_relay[ 2 ];
                         if ( event === "error" ) return;
                         //prepare entry
-                        var content = event.content;
+                        var contentLoop = content => {
+                            if ( !content.includes( "nevent" ) ) return content;
+                            var index_of_nevent_str = content.indexOf( 'nevent' );
+                            var index_of_next_space = content.substring( index_of_nevent_str ).indexOf( " " );
+                            if ( index_of_next_space >= 0 ) var endpoint = index_of_next_space;
+                            else var endpoint = content.length;
+                            var nevent_str = content.substring( index_of_nevent_str, endpoint );
+                            var regex = /^[a-zA-Z0-9]*$/;
+                            var str_is_bad = !regex.test( nevent_str );
+                            var startpoint = index_of_nevent_str;
+                            if ( index_of_nevent_str > 0 && content.substring( index_of_nevent_str - 1, index_of_nevent_str ) === ":" ) var startpoint = index_of_nevent_str - 6;
+                            var wholestring = content.substring( startpoint, endpoint );
+                            if ( str_is_bad ) wholestring = "---this is a fake nostr event string---";
+                            var modified_content = content.replace( wholestring, `---REPLACEREPLACEREPLACE1---${threads.textToHex( wholestring )}---REPLACEREPLACEREPLACE2---` );
+                            content = contentLoop( modified_content );
+                            return content;
+                        }
+                        var content = contentLoop( event.content );
                         var div = document.createElement( "div" );
                         div.innerHTML = `
                             <div class="post">
@@ -280,9 +304,6 @@
                             </div>
                         `;
                         div = div.firstElementChild;
-
-                        //set content
-                        div.getElementsByClassName( "content" )[ 0 ].innerText = event.content;
 
                         //set view_on_njump button
                         var nevent_str = threads.convertPubkeyAndRelaysToNprofile( "nevent", event.id, [ relay ] );
@@ -307,6 +328,44 @@
 
                         //set date
                         div.getElementsByClassName( "date" )[ 0 ].innerText = new Date( event.created_at * 1000 ).toLocaleDateString( "en-CA" ) + " " + new Date( event.created_at * 1000 ).toLocaleTimeString();
+
+                        //replace any parts that say to replace them
+                        var divsLoop = ( content, divs = [], replaceable_parts = [] ) => {
+                            if ( !content.includes( `---REPLACEREPLACEREPLACE1---` ) ) {
+                                var div = document.createElement( "div" );
+                                div.innerText = content;
+                                divs.push( div );
+                                return [ divs, replaceable_parts ];
+                            }
+                            var everything_before = content.substring( 0, content.indexOf( `---REPLACEREPLACEREPLACE1---` ) );
+                            var div1 = document.createElement( "div" );
+                            div1.innerText = everything_before;
+                            divs.push( div1 );
+                            var replaceable_part = content.substring( content.indexOf( `---REPLACEREPLACEREPLACE1---` ) + 28, content.indexOf( `---REPLACEREPLACEREPLACE2---` ) );
+                            replaceable_parts.push( threads.hexToText( replaceable_part ) );
+                            var everything_after = content.substring( content.indexOf( `---REPLACEREPLACEREPLACE2---` ) + 28 );
+                            return divsLoop( everything_after, divs, replaceable_parts );
+                        }
+                        var divs_and_stuff = divsLoop( content );
+                        //set content
+                        divs_and_stuff[ 0 ].forEach( ( item, index ) => {
+                            div.getElementsByClassName( "content" )[ 0 ].append( divs_and_stuff[ 0 ][ index ] );
+                            if ( divs_and_stuff[ 1 ][ index ] ) {
+                                var nevent_str = divs_and_stuff[ 1 ][ index ];
+                                if ( nevent_str.startsWith( "nostr:" ) ) nevent_str = nevent_str.substring( 6 );
+                                var btn = document.createElement( "button" );
+                                btn.innerText = "View quote";
+                                var a_tag = document.createElement( "a" );
+                                a_tag.target = "_blank";
+                                a_tag.href = window.location.protocol + "//" + window.location.hostname + window.location.pathname + `#nevent=${nevent_str}`;
+                                a_tag.append( btn );
+                                var div2 = document.createElement( "div" );
+                                div2.classList.add( "quoted_note" );
+                                div2.innerHTML = `Quoted note<div>&nbsp;</div>`;
+                                div2.append( a_tag );
+                                div.getElementsByClassName( "content" )[ 0 ].append( div2 );
+                            }
+                        });
 
                         //display entry
                         $( '.thread' ).prepend( div );
